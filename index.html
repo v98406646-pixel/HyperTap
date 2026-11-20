@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Автокликер</title>
+  <style>
+    :root {
+      --bg: #0f0c18;
+      --card: #191528;
+      --card-inner: #221d35;
+      --border: #2e2846;
+      --accent: #7c5cff;
+      --accent-glow: rgba(124, 92, 255, 0.45);
+      --accent-soft: rgba(124, 92, 255, 0.16);
+      --success: #22c55e;
+      --danger: #ef4444;
+      --text: #f3f1ff;
+      --muted: #9890b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 78px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    /* Шапка */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 4px 16px;
+    }
+
+    .header-icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #a996ff;
+      border-radius: 10px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    /* Карточки */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    /* Главная кнопка запуска */
+    .hero-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 18px 20px;
+    }
+
+    .start-ring {
+      width: 176px;
+      height: 176px;
+      border-radius: 50%;
+      padding: 12px;
+      background: rgba(124, 92, 255, 0.14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, box-shadow 0.25s ease;
+    }
+
+    .start-ring.running {
+      box-shadow: 0 0 36px rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.14);
+    }
+
+    .start-btn {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(145deg, #8b6eff, #6344e6);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 26px var(--accent-glow);
+      transition: transform 0.15s ease, background 0.25s ease;
+    }
+
+    .start-btn:active {
+      transform: scale(0.96);
+    }
+
+    .start-btn.running {
+      background: linear-gradient(145deg, #22c55e, #15803d);
+      box-shadow: 0 10px 26px rgba(34, 197, 94, 0.4);
+    }
+
+    .status-pill {
+      margin-top: 16px;
+      padding: 7px 16px;
+      border-radius: 999px;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #6b6485;
+      transition: background 0.2s;
+    }
+
+    .status-pill.running {
+      color: #bbf7d0;
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .status-pill.running .status-dot {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    /* Тестовая кнопка проверки автокликера */
+    .test-zone {
+      border: 1px dashed #4e3f87;
+      background: linear-gradient(180deg, #1b162d 0%, #151122 100%);
+    }
+
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .test-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #bcaeff;
+    }
+
+    .test-desc {
+      margin: 0 0 14px;
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .target-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    #autoTargetBtn {
+      flex: 1;
+      height: 62px;
+      border-radius: 16px;
+      border: 2px solid #5946a6;
+      background: #241e3b;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.06s ease, background 0.08s ease, border-color 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    #autoTargetBtn.hit {
+      transform: scale(0.95);
+      background: #7c5cff;
+      border-color: #c4b5fd;
+      box-shadow: 0 0 22px rgba(124, 92, 255, 0.75);
+    }
+
+    .hit-counter-box {
+      min-width: 96px;
+      height: 62px;
+      border-radius: 16px;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
+    }
+
+    .hit-counter-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #c4b5fd;
+      line-height: 1.1;
+    }
+
+    .hit-counter-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .reset-test-btn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* Настройки */
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      margin: 0 0 16px;
+    }
+
+    .setting-block {
+      margin-bottom: 18px;
+    }
+
+    .setting-block:last-child {
+      margin-bottom: 0;
+    }
+
+    .setting-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .setting-label {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .help-tip {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stepper-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-unit-box {
+      flex: 1;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+    }
+
+    .input-unit-box input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 600;
+      outline: none;
+    }
+
+    .unit-tag {
+      color: var(--muted);
+      font-size: 13px;
+      padding-left: 10px;
+      border-left: 1px solid var(--border);
+    }
+
+    .circle-step-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--card-inner);
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .circle-step-btn:active {
+      background: var(--accent);
+    }
+
+    /* Сегмент-переключатели */
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px;
+      gap: 4px;
+    }
+
+    .seg-btn {
+      height: 36px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .seg-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .limit-extra {
+      margin-top: 10px;
+      display: none;
+    }
+
+    .limit-extra.visible {
+      display: flex;
+    }
+
+    /* Слайдер скорости */
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      height: 6px;
+      cursor: pointer;
+    }
+
+    .speed-val {
+      font-weight: 700;
+      font-size: 15px;
+      min-width: 42px;
+      text-align: right;
+    }
+
+    /* Вкладки */
+    .tab-page {
+      display: none;
+    }
+
+    .tab-page.active {
+      display: block;
+    }
+
+    /* Статистика */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .stat-box {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .stat-num {
+      font-size: 22px;
+      font-weight: 800;
+      color: #c4b5fd;
+    }
+
+    .stat-lbl {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .log-list {
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 12.5px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-item {
+      background: var(--card-inner);
+      padding: 9px 12px;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Нижняя навигация */
+    nav.bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 68px;
+      background: #141022;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 50;
+    }
+
+    .nav-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 6px 14px;
+    }
+
+    .nav-btn.active {
+      color: #9b82ff;
+    }
+
+    /* Всплывающее уведомление */
+    .toast {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      background: #272042;
+      border: 1px solid var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      z-index: 100;
+      transition: transform 0.25s ease;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<div class="container">
+  <header>
+    <button class="header-icon" title="Курсор" onclick="showToast('Автокликер готов к тесту')">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 3l14 9-6 1.5L10 20 5 3z"/>
+        <path d="M3 2l1 2M9 1v2M1 8h2"/>
+      </svg>
+    </button>
+    <h1>Автокликер</h1>
+    <button class="header-icon" title="Сброс настроек" onclick="resetSettings()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.4 1.13H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- ВКЛАДКА 1: ГЛАВНАЯ -->
+  <div id="tab-home" class="tab-page active">
+    <div class="card hero-card">
+      <div id="startRing" class="start-ring">
+        <button id="mainStartBtn" class="start-btn" onclick="toggleClicker()">
+          <svg id="playIcon" width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="6,4 20,12 6,20"/>
+          </svg>
+          <span id="mainBtnText">Начать</span>
+        </button>
+      </div>
+
+      <div id="statusPill" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Остановлен</span>
+      </div>
+    </div>
+
+    <!-- СПЕЦИАЛЬНАЯ КНОПКА ДЛЯ ПРОВЕРКИ АВТОКЛИКЕРА -->
+    <div class="card test-zone">
+      <div class="test-header">
+        <span style="font-weight:700; font-size:15px;">Проверка работы кликера</span>
+        <span class="test-badge">Тест-зона</span>
+      </div>
+      <p class="test-desc">
+        Не нажимай на кнопку ниже сам — нажми <b>«Начать»</b> выше, и автокликер будет нажимать её автоматически с выбранным интервалом.
+      </p>
+      <div class="target-wrapper">
+        <button id="autoTargetBtn" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="12" cy="12" r="9"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>Кнопка-мишень</span>
+        </button>
+        <div class="hit-counter-box">
+          <div id="testHitsVal" class="hit-counter-val">0</div>
+          <div class="hit-counter-label">кликов</div>
+        </div>
+      </div>
+      <button class="reset-test-btn" onclick="resetTestHits()">Сбросить счётчик мишени</button>
+    </div>
+
+    <!-- НАСТРОЙКИ -->
+    <div class="card">
+      <div class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9b82ff" stroke-width="2">
+          <line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="#191528"/>
+          <line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="#191528"/>
+          <line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="#191528"/>
+        </svg>
+        <span>Настройки</span>
+      </div>
+
+      <!-- Интервал кликов -->
+      <div class="setting-block">
+        <div class="setting-row-head">
+          <span class="setting-label">Интервал кликов</span>
+          <button class="help-tip" onclick="showToast('Задержка между кликами в миллисекундах (1000 мс = 1 сек)')">?</button>
+        </div>
+        <div class="stepper-row">
+          <div class="input-unit-box">
+            <input id="intervalInput" type="number" min="20" max="60000" value="100" />
+            <span class="unit-tag">мс</span>
+          </div>
+          <button class="circle-step-btn" onclick="changeInterval(-25)">−</button>
+          <button class="circle-step-btn" onclick="changeInterval(25)">+</button>
+        </div>
+      </div>
+
+      <!-- Кликать в месте -->
+      <div class="setting-block">
+        <div class="setting-row-head">
+          <span class="setting-label">Кликать в месте</span>
+          <button class="help-tip" onclick="showToast('В APK-версии переключит точку клика: за курсором или по кружку-мишени')">?</button>
+        </div>
+        <div class="segmented" id="placeModeGroup">
+          <button class="seg-btn active" data-val="cursor" onclick="setPlaceMode('cursor', this)">Курсор</button>
+          <button class="seg-btn" data-val="fixed" onclick="setPlaceMode('fixed', this)">Фиксированная точка</button>
+        </div>
+      </div>
+
+      <!-- Режим работы -->
+      <div class="setting-block">
+        <div class="setting-row-head">
+          <span class="setting-label">Режим работы</span>
+          <button class="help-tip" onclick="showToast('Бесконечно — пока не нажмёшь Стоп. Ограниченное число — остановится сам')">?</button>
+        </div>
+        <div class="segmented" id="workModeGroup">
+          <button class="seg-btn active" data-val="infinite" onclick="setWorkMode('infinite', this)">Бесконечно</button>
+          <button class="seg-btn" data-val="limited" onclick="setWorkMode('limited', this)">Ограниченное число</button>
+        </div>
+        <div id="limitRow" class="stepper-row limit-extra">
+          <div class="input-unit-box">
+            <input id="limitInput" type="number" min="1" max="100000" value="50" />
+            <span class="unit-tag">раз</span>
+          </div>
+          <button class="circle-step-btn" onclick="changeLimit(-10)">−</button>
+          <button class="circle-step-btn" onclick="changeLimit(10)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Скорость работы -->
+    <div class="card">
+      <div class="setting-row-head" style="margin-bottom:4px;">
+        <span class="setting-label">⚡ Скорость работы</span>
+        <button class="help-tip" onclick="showToast('Множитель ускоряет или замедляет выбранный интервал кликов')">?</button>
+      </div>
+      <div class="slider-wrap">
+        <input id="speedSlider" type="range" min="0.5" max="3.0" step="0.1" value="1.0" oninput="updateSpeedLabel()" />
+        <span id="speedLabel" class="speed-val">1.0×</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 2: СТАТИСТИКА -->
+  <div id="tab-stats" class="tab-page">
+    <div class="card">
+      <div class="section-title">Статистика работы</div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div id="statTotalClicks" class="stat-num">0</div>
+          <div class="stat-lbl">Всего автокликов</div>
+        </div>
+        <div class="stat-box">
+          <div id="statEffectiveInterval" class="stat-num">100 мс</div>
+          <div class="stat-lbl">Реальная задержка</div>
+        </div>
+      </div>
+      <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Журнал запусков</div>
+      <div id="logList" class="log-list">
+        <div class="log-item"><span>Пока нет запусков</span><span>—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА 3: О ПРИЛОЖЕНИИ -->
+  <div id="tab-about" class="tab-page">
+    <div class="card">
+      <div class="section-title">О приложении</div>
+      <p style="font-size:13.5px; color:var(--muted); line-height:1.5; margin-top:0;">
+        Прототип интерфейса автокликера с проверкой работы на тестовой кнопке-мишени.
+      </p>
+      <p style="font-size:13.5px; color:var(--muted); line-height:1.5;">
+        <b>Как проверить сейчас:</b> перейди на вкладку «Главная», выбери интервал или лимит кликов и нажми <b>«Начать»</b>. Программа сама начнёт отправлять события нажатия в «Кнопку-мишень», а ты увидишь её подсветку и рост счётчика.
+      </p>
+      <p style="font-size:13.5px; color:var(--muted); line-height:1.5; margin-bottom:0;">
+        <b>Следующий шаг для APK:</b> подключение <code>AccessibilityService</code> и плавающего кружка поверх экрана при сборке через GitHub.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Нижнее меню -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="switchTab('home', this)">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 3l9 8h-3v9h-5v-6h-2v6H6v-9H3l9-8z"/>
+    </svg>
+    <span>Главная</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab('stats', this)">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="4" y="10" width="4" height="10" rx="1"/>
+      <rect x="10" y="5" width="4" height="15" rx="1"/>
+      <rect x="16" y="13" width="4" height="7" rx="1"/>
+    </svg>
+    <span>Статистика</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab('about', this)">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="9"/>
+      <line x1="12" y1="11" x2="12" y2="16"/>
+      <circle cx="12" cy="8" r="1" fill="currentColor"/>
+    </svg>
+    <span>О приложении</span>
+  </button>
+</nav>
+
+<script>
+  let isRunning = false;
+  let timerId = null;
+  let testHits = 0;
+  let totalClicks = 0;
+  let sessionClicks = 0;
+  let placeMode = 'cursor';
+  let workMode = 'infinite';
+  const logs = [];
+
+  const targetBtn = document.getElementById('autoTargetBtn');
+  const testHitsVal = document.getElementById('testHitsVal');
+  const statTotalClicks = document.getElementById('statTotalClicks');
+
+  // Реакция самой кнопки-мишени на пришедший клик
+  targetBtn.addEventListener('click', (e) => {
+    testHits++;
+    totalClicks++;
+    sessionClicks++;
+    testHitsVal.textContent = testHits;
+    statTotalClicks.textContent = totalClicks;
+
+    targetBtn.classList.add('hit');
+    setTimeout(() => targetBtn.classList.remove('hit'), 75);
+  });
+
+  function getEffectiveDelay() {
+    const base = Math.max(20, parseInt(document.getElementById('intervalInput').value, 10) || 100);
+    const speed = parseFloat(document.getElementById('speedSlider').value) || 1.0;
+    return Math.max(15, Math.round(base / speed));
+  }
+
+  function updateSpeedLabel() {
+    const speed = parseFloat(document.getElementById('speedSlider').value).toFixed(1);
+    document.getElementById('speedLabel').textContent = speed + '×';
+    document.getElementById('statEffectiveInterval').textContent = getEffectiveDelay() + ' мс';
+    if (isRunning) {
+      restartLoop();
+    }
+  }
+
+  function changeInterval(delta) {
+    const inp = document.getElementById('intervalInput');
+    const next = Math.max(20, (parseInt(inp.value, 10) || 100) + delta);
+    inp.value = next;
+    document.getElementById('statEffectiveInterval').textContent = getEffectiveDelay() + ' мс';
+    if (isRunning) restartLoop();
+  }
+
+  function changeLimit(delta) {
+    const inp = document.getElementById('limitInput');
+    inp.value = Math.max(1, (parseInt(inp.value, 10) || 50) + delta);
+  }
+
+  function setPlaceMode(mode, btn) {
+    placeMode = mode;
+    document.querySelectorAll('#placeModeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showToast(mode === 'cursor' ? 'Режим: Курсор' : 'Режим: Фиксированная точка');
+  }
+
+  function setWorkMode(mode, btn) {
+    workMode = mode;
+    document.querySelectorAll('#workModeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('limitRow').classList.toggle('visible', mode === 'limited');
+  }
+
+  function performAutoClick() {
+    if (!isRunning) return;
+
+    // Программный клик по специальной кнопке-мишени
+    targetBtn.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+
+    if (workMode === 'limited') {
+      const maxClicks = Math.max(1, parseInt(document.getElementById('limitInput').value, 10) || 50);
+      if (sessionClicks >= maxClicks) {
+        stopClicker('Лимит выполнен (' + maxClicks + ' кликов)');
+      }
+    }
+  }
+
+  function restartLoop() {
+    clearInterval(timerId);
+    const delay = getEffectiveDelay();
+    document.getElementById('statEffectiveInterval').textContent = delay + ' мс';
+    timerId = setInterval(performAutoClick, delay);
+  }
+
+  function toggleClicker() {
+    if (isRunning) {
+      stopClicker('Остановлено вручную');
+    } else {
+      startClicker();
+    }
+  }
+
+  function startClicker() {
+    isRunning = true;
+    sessionClicks = 0;
+
+    const btn = document.getElementById('mainStartBtn');
+    const ring = document.getElementById('startRing');
+    const pill = document.getElementById('statusPill');
+
+    btn.classList.add('running');
+    ring.classList.add('running');
+    pill.classList.add('running');
+
+    document.getElementById('mainBtnText').textContent = 'Стоп';
+    document.getElementById('statusText').textContent = 'Работает';
+    document.getElementById('playIcon').innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+
+    performAutoClick();
+    restartLoop();
+  }
+
+  function stopClicker(reason) {
+    isRunning = false;
+    clearInterval(timerId);
+    timerId = null;
+
+    const btn = document.getElementById('mainStartBtn');
+    const ring = document.getElementById('startRing');
+    const pill = document.getElementById('statusPill');
+
+    btn.classList.remove('running');
+    ring.classList.remove('running');
+    pill.classList.remove('running');
+
+    document.getElementById('mainBtnText').textContent = 'Начать';
+    document.getElementById('statusText').textContent = 'Остановлен';
+    document.getElementById('playIcon').innerHTML = '<polygon points="6,4 20,12 6,20"/>';
+
+    if (sessionClicks > 0) {
+      addLog(reason, sessionClicks + ' кл.');
+    }
+  }
+
+  function resetTestHits() {
+    testHits = 0;
+    testHitsVal.textContent = '0';
+    showToast('Счётчик мишени сброшен');
+  }
+
+  function resetSettings() {
+    if (isRunning) stopClicker('Сброс настроек');
+    document.getElementById('intervalInput').value = 100;
+    document.getElementById('limitInput').value = 50;
+    document.getElementById('speedSlider').value = 1.0;
+    updateSpeedLabel();
+    showToast('Настройки сброшены');
+  }
+
+  function addLog(label, countText) {
+    const now = new Date();
+    const time = now.toTimeString().slice(0, 5);
+    logs.unshift({ label: time + ' • ' + label, count: countText });
+    if (logs.length > 15) logs.pop();
+
+    const list = document.getElementById('logList');
+    list.innerHTML = logs.map(item =>
+      `<div class="log-item"><span>${item.label}</span><b>${item.count}</b></div>`
+    ).join('');
+  }
+
+  function switchTab(tabName, navBtn) {
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    navBtn.classList.add('active');
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+</script>
+
+</body>
+</html>
