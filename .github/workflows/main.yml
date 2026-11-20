@@ -72,6 +72,11 @@ jobs:
             }
           fi
 
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -792,7 +797,7 @@ jobs:
       - name: Assemble Debug APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
