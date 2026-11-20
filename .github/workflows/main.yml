@@ -1,18 +1,784 @@
-# Инструкция для GitHub: сборка приложения HyperTap
+name: Build HyperTap APK
 
-## 1. Что нужно сделать GitHub
-Собрать Android-приложение **HyperTap** (автокликер с компактной плавающей панелью управления, перетаскиваемым кружочком-мишенью и настройками интервала/лимита кликов).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
-## 2. Откуда брать картинку и название
-- **Название приложения:** `HyperTap` (прописать в ресурсах и отображать на главном экране приложения).
-- **Картинка иконки:** GitHub должен искать файл `icon.png` в корне репозитория (рядом с `index.html`) и подставить его на иконку приложения (`ic_launcher` и `ic_launcher_round` в папки `mipmap-*`). Если `icon.png` в корне нет — сборка не должна падать, а использовать стандартную иконку.
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-## 3. Какие разрешения нужно добавить в приложение
-- `SYSTEM_ALERT_WINDOW` — чтобы плавающая панель и кружок-мишень отображались поверх других окон и игр.
-- Служба `AccessibilityService` с параметром `android:canPerformGestures="true"` — чтобы выполнять реальные нажатия по координатам кружка-мишени.
-- `POST_NOTIFICATIONS` — для корректной работы уведомлений на новых версиях Android.
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-## 4. Как запускать и забирать готовый файл
-1. Убедись, что в корне ветки `main` лежат `icon.png` и `index.html`, а в `.github/workflows/build.yml` настроен workflow сборки.
-2. Запусти сборку во вкладке **Actions** (кнопка **Run workflow**).
-3. После успешного завершения скачай готовый APK из раздела **Artifacts** и установи на Android.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate full Android project
+        run: |
+          mkdir -p app/src/main/java/com/example/hypertap \
+                   app/src/main/res/xml \
+                   app/src/main/res/values \
+                   app/src/main/res/mipmap-mdpi \
+                   app/src/main/res/mipmap-hdpi \
+                   app/src/main/res/mipmap-xhdpi \
+                   app/src/main/res/mipmap-xxhdpi \
+                   app/src/main/res/mipmap-xxxhdpi
+
+          if [ -f "icon.png" ]; then
+            python3 -c '
+          from PIL import Image
+          sizes = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+          src = Image.open("icon.png").convert("RGBA")
+          for folder, px in sizes.items():
+              resized = src.resize((px, px), Image.Resampling.LANCZOS)
+              resized.save(f"app/src/main/res/{folder}/ic_launcher.png")
+              resized.save(f"app/src/main/res/{folder}/ic_launcher_round.png")
+          ' 2>/dev/null || {
+              for folder in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+                cp icon.png "app/src/main/res/$folder/ic_launcher.png"
+                cp icon.png "app/src/main/res/$folder/ic_launcher_round.png"
+              done
+            }
+          fi
+
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "HyperTap"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.example.hypertap"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.example.hypertap"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.appcompat:appcompat:1.6.1")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">HyperTap</string>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeAllMask"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:canPerformGestures="true"
+              android:notificationTimeout="100"
+              android:description="@string/app_name" />
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="@string/app_name"
+                  android:theme="@style/Theme.AppCompat.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".FloatingControlService"
+                      android:enabled="true"
+                      android:exported="false" />
+
+                  <service
+                      android:name=".ClickAccessibilityService"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config" />
+                  </service>
+
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/hypertap/ClickConfig.kt
+          package com.example.hypertap
+
+          object ClickConfig {
+              var intervalMs: Long = 100L
+              var isLimited: Boolean = false
+              var maxClicks: Int = 1000
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/hypertap/ClickAccessibilityService.kt
+          package com.example.hypertap
+
+          import android.accessibilityservice.AccessibilityService
+          import android.accessibilityservice.GestureDescription
+          import android.graphics.Path
+          import android.view.accessibility.AccessibilityEvent
+
+          class ClickAccessibilityService : AccessibilityService() {
+
+              companion object {
+                  var instance: ClickAccessibilityService? = null
+              }
+
+              override fun onServiceConnected() {
+                  super.onServiceConnected()
+                  instance = this
+              }
+
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+              override fun onInterrupt() {}
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  instance = null
+              }
+
+              fun performClickAt(x: Float, y: Float) {
+                  val path = Path().apply { moveTo(x, y) }
+                  val gesture = GestureDescription.Builder()
+                      .addStroke(GestureDescription.StrokeDescription(path, 0L, 35L))
+                      .build()
+                  dispatchGesture(gesture, null, null)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/hypertap/FloatingControlService.kt
+          package com.example.hypertap
+
+          import android.app.Service
+          import android.content.Intent
+          import android.graphics.Color
+          import android.graphics.PixelFormat
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Handler
+          import android.os.IBinder
+          import android.os.Looper
+          import android.view.Gravity
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.WindowManager
+          import android.widget.Button
+          import android.widget.LinearLayout
+          import android.widget.TextView
+
+          class FloatingControlService : Service() {
+
+              private lateinit var windowManager: WindowManager
+              private lateinit var controlPanel: LinearLayout
+              private lateinit var panelParams: WindowManager.LayoutParams
+              private lateinit var btnStartStop: Button
+              private lateinit var tvCounter: TextView
+
+              private var targetCircle: TextView? = null
+              private lateinit var targetParams: WindowManager.LayoutParams
+
+              private val handler = Handler(Looper.getMainLooper())
+              private var isClicking = false
+              private var doneClicks = 0
+
+              private val clickRunnable = object : Runnable {
+                  override fun run() {
+                      if (!isClicking) return
+
+                      if (ClickConfig.isLimited && doneClicks >= ClickConfig.maxClicks) {
+                          stopClicking()
+                          return
+                      }
+
+                      targetCircle?.let { circle ->
+                          val location = IntArray(2)
+                          circle.getLocationOnScreen(location)
+                          val centerX = location[0] + circle.width / 2f
+                          val centerY = location[1] + circle.height / 2f
+                          ClickAccessibilityService.instance?.performClickAt(centerX, centerY)
+                          doneClicks++
+                          tvCounter.text = "$doneClicks"
+                      }
+
+                      val delay = ClickConfig.intervalMs.coerceAtLeast(25L)
+                      handler.postDelayed(this, delay)
+                  }
+              }
+
+              override fun onCreate() {
+                  super.onCreate()
+                  windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                  createControlPanel()
+                  toggleTargetCircle()
+              }
+
+              private fun styleMiniButton(btn: Button, bgHex: String, sizePx: Int = 84) {
+                  btn.layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply {
+                      topMargin = 10
+                  }
+                  btn.background = GradientDrawable().apply {
+                      shape = GradientDrawable.OVAL
+                      setColor(Color.parseColor(bgHex))
+                      setStroke(2, Color.parseColor("#4B3F7A"))
+                  }
+                  btn.setTextColor(Color.WHITE)
+                  btn.textSize = 15f
+                  btn.isAllCaps = false
+                  btn.setPadding(0, 0, 0, 0)
+              }
+
+              private fun createControlPanel() {
+                  val panelBg = GradientDrawable().apply {
+                      shape = GradientDrawable.RECTANGLE
+                      cornerRadius = 48f
+                      setColor(Color.parseColor("#E6191528"))
+                      setStroke(2, Color.parseColor("#7C5CFF"))
+                  }
+
+                  controlPanel = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      gravity = Gravity.CENTER_HORIZONTAL
+                      setPadding(14, 14, 14, 16)
+                      background = panelBg
+                  }
+
+                  val dragHandle = TextView(this).apply {
+                      text = "•••"
+                      setTextColor(Color.parseColor("#A996FF"))
+                      textSize = 12f
+                      gravity = Gravity.CENTER
+                      setPadding(8, 2, 8, 6)
+                  }
+
+                  tvCounter = TextView(this).apply {
+                      text = "0"
+                      setTextColor(Color.parseColor("#E2DCFF"))
+                      textSize = 12f
+                      gravity = Gravity.CENTER
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.RECTANGLE
+                          cornerRadius = 20f
+                          setColor(Color.parseColor("#241E3B"))
+                      }
+                      setPadding(14, 4, 14, 4)
+                  }
+
+                  btnStartStop = Button(this).apply {
+                      text = "▶"
+                      styleMiniButton(this, "#7C5CFF", 88)
+                      setOnClickListener {
+                          if (isClicking) stopClicking() else startClicking()
+                      }
+                  }
+
+                  val btnToggleTarget = Button(this).apply {
+                      text = "◎"
+                      styleMiniButton(this, "#26203D", 80)
+                      setOnClickListener { toggleTargetCircle() }
+                  }
+
+                  val btnClose = Button(this).apply {
+                      text = "×"
+                      styleMiniButton(this, "#381D2C", 76)
+                      setOnClickListener { stopSelf() }
+                  }
+
+                  controlPanel.addView(dragHandle)
+                  controlPanel.addView(tvCounter)
+                  controlPanel.addView(btnStartStop)
+                  controlPanel.addView(btnToggleTarget)
+                  controlPanel.addView(btnClose)
+
+                  panelParams = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.START
+                      x = 18
+                      y = 240
+                  }
+
+                  dragHandle.setOnTouchListener(object : View.OnTouchListener {
+                      private var initX = 0
+                      private var initY = 0
+                      private var touchX = 0f
+                      private var touchY = 0f
+
+                      override fun onTouch(v: View?, event: MotionEvent): Boolean {
+                          when (event.action) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initX = panelParams.x
+                                  initY = panelParams.y
+                                  touchX = event.rawX
+                                  touchY = event.rawY
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  panelParams.x = initX + (event.rawX - touchX).toInt()
+                                  panelParams.y = initY + (event.rawY - touchY).toInt()
+                                  windowManager.updateViewLayout(controlPanel, panelParams)
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+
+                  windowManager.addView(controlPanel, panelParams)
+              }
+
+              private fun startClicking() {
+                  if (targetCircle == null) toggleTargetCircle()
+                  isClicking = true
+                  doneClicks = 0
+                  tvCounter.text = "0"
+                  btnStartStop.text = "■"
+                  styleMiniButton(btnStartStop, "#16A34A", 88)
+                  setTargetTouchable(false)
+                  handler.post(clickRunnable)
+              }
+
+              private fun stopClicking() {
+                  isClicking = false
+                  handler.removeCallbacks(clickRunnable)
+                  btnStartStop.text = "▶"
+                  styleMiniButton(btnStartStop, "#7C5CFF", 88)
+                  setTargetTouchable(true)
+              }
+
+              private fun toggleTargetCircle() {
+                  if (targetCircle != null) {
+                      if (isClicking) stopClicking()
+                      windowManager.removeView(targetCircle)
+                      targetCircle = null
+                      return
+                  }
+
+                  val sizePx = 88
+                  val circleDrawable = GradientDrawable().apply {
+                      shape = GradientDrawable.OVAL
+                      setColor(Color.parseColor("#557C5CFF"))
+                      setStroke(4, Color.parseColor("#D8CFFF"))
+                  }
+
+                  targetCircle = TextView(this).apply {
+                      text = "1"
+                      gravity = Gravity.CENTER
+                      setTextColor(Color.WHITE)
+                      textSize = 14f
+                      background = circleDrawable
+                  }
+
+                  targetParams = WindowManager.LayoutParams(
+                      sizePx,
+                      sizePx,
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.START
+                      x = 440
+                      y = 780
+                  }
+
+                  targetCircle?.setOnTouchListener(object : View.OnTouchListener {
+                      private var initX = 0
+                      private var initY = 0
+                      private var touchX = 0f
+                      private var touchY = 0f
+
+                      override fun onTouch(v: View?, event: MotionEvent): Boolean {
+                          when (event.action) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initX = targetParams.x
+                                  initY = targetParams.y
+                                  touchX = event.rawX
+                                  touchY = event.rawY
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  targetParams.x = initX + (event.rawX - touchX).toInt()
+                                  targetParams.y = initY + (event.rawY - touchY).toInt()
+                                  windowManager.updateViewLayout(targetCircle, targetParams)
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+
+                  windowManager.addView(targetCircle, targetParams)
+              }
+
+              private fun setTargetTouchable(touchable: Boolean) {
+                  val circle = targetCircle ?: return
+                  targetParams.flags = if (touchable) {
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                  } else {
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                  }
+                  windowManager.updateViewLayout(circle, targetParams)
+              }
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  stopClicking()
+                  if (::controlPanel.isInitialized) windowManager.removeView(controlPanel)
+                  targetCircle?.let { windowManager.removeView(it) }
+              }
+
+              override fun onBind(intent: Intent?): IBinder? = null
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/example/hypertap/MainActivity.kt
+          package com.example.hypertap
+
+          import android.Manifest
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.graphics.Color
+          import android.graphics.drawable.GradientDrawable
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.view.Gravity
+          import android.widget.Button
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
+
+          class MainActivity : AppCompatActivity() {
+
+              private lateinit var tvOverlayStatus: TextView
+              private lateinit var tvAccessibilityStatus: TextView
+              private lateinit var tvIntervalValue: TextView
+              private lateinit var tvModeValue: TextView
+              private lateinit var tvLimitValue: TextView
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  requestNotificationPermissionIfNeeded()
+
+                  val scroll = ScrollView(this).apply {
+                      setBackgroundColor(Color.parseColor("#0F0C18"))
+                  }
+
+                  val root = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(40, 64, 40, 64)
+                  }
+
+                  val header = TextView(this).apply {
+                      text = "HyperTap"
+                      setTextColor(Color.WHITE)
+                      textSize = 24f
+                      gravity = Gravity.CENTER
+                      setPadding(0, 0, 0, 32)
+                  }
+                  root.addView(header)
+
+                  val launchCard = createCard()
+                  val btnLaunch = Button(this).apply {
+                      text = "▶ Начать (плавающая панель)"
+                      setTextColor(Color.WHITE)
+                      textSize = 16f
+                      isAllCaps = false
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.RECTANGLE
+                          cornerRadius = 36f
+                          setColor(Color.parseColor("#7C5CFF"))
+                      }
+                      setPadding(32, 32, 32, 32)
+                      setOnClickListener {
+                          when {
+                              !Settings.canDrawOverlays(this@MainActivity) -> {
+                                  Toast.makeText(this@MainActivity, "Сначала выдай разрешение поверх окон", Toast.LENGTH_SHORT).show()
+                              }
+                              !isAccessibilityServiceEnabled() -> {
+                                  Toast.makeText(this@MainActivity, "Сначала включи спец. возможности", Toast.LENGTH_SHORT).show()
+                              }
+                              else -> {
+                                  startService(Intent(this@MainActivity, FloatingControlService::class.java))
+                                  Toast.makeText(this@MainActivity, "Панель и кружок запущены!", Toast.LENGTH_SHORT).show()
+                              }
+                          }
+                      }
+                  }
+                  launchCard.addView(btnLaunch)
+                  root.addView(launchCard)
+
+                  val permCard = createCard()
+                  permCard.addView(createSectionTitle("Разрешения Android"))
+
+                  tvOverlayStatus = TextView(this).apply { textSize = 14f; setPadding(0, 8, 0, 8) }
+                  val btnOverlay = createActionButton("1. Разрешить поверх других окон") {
+                      startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                  }
+
+                  tvAccessibilityStatus = TextView(this).apply { textSize = 14f; setPadding(0, 20, 0, 8) }
+                  val btnAccessibility = createActionButton("2. Включить спец. возможности") {
+                      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                  }
+
+                  permCard.addView(tvOverlayStatus)
+                  permCard.addView(btnOverlay)
+                  permCard.addView(tvAccessibilityStatus)
+                  permCard.addView(btnAccessibility)
+                  root.addView(permCard)
+
+                  val settingsCard = createCard()
+                  settingsCard.addView(createSectionTitle("Настройки"))
+
+                  tvIntervalValue = TextView(this).apply {
+                      text = "Интервал кликов: ${ClickConfig.intervalMs} мс"
+                      setTextColor(Color.WHITE)
+                      textSize = 15f
+                      setPadding(0, 8, 0, 12)
+                  }
+
+                  val intervalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                  val btnMinusInt = createSmallButton("− 25 мс") {
+                      ClickConfig.intervalMs = (ClickConfig.intervalMs - 25L).coerceAtLeast(25L)
+                      tvIntervalValue.text = "Интервал кликов: ${ClickConfig.intervalMs} мс"
+                  }
+                  val btnPlusInt = createSmallButton("+ 25 мс") {
+                      ClickConfig.intervalMs += 25L
+                      tvIntervalValue.text = "Интервал кликов: ${ClickConfig.intervalMs} мс"
+                  }
+                  intervalRow.addView(btnMinusInt)
+                  intervalRow.addView(btnPlusInt)
+
+                  tvModeValue = TextView(this).apply {
+                      text = "Режим работы: Бесконечно"
+                      setTextColor(Color.WHITE)
+                      textSize = 15f
+                      setPadding(0, 24, 0, 12)
+                  }
+
+                  val btnToggleMode = createActionButton("Переключить: Бесконечно / Лимит") {
+                      ClickConfig.isLimited = !ClickConfig.isLimited
+                      tvModeValue.text = if (ClickConfig.isLimited) {
+                          "Режим работы: Ограниченное число"
+                      } else {
+                          "Режим работы: Бесконечно"
+                      }
+                  }
+
+                  tvLimitValue = TextView(this).apply {
+                      text = "Лимит кликов: ${ClickConfig.maxClicks}"
+                      setTextColor(Color.parseColor("#9890B8"))
+                      textSize = 14f
+                      setPadding(0, 16, 0, 10)
+                  }
+
+                  val limitRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                  val btnMinusLim = createSmallButton("− 50") {
+                      ClickConfig.maxClicks = (ClickConfig.maxClicks - 50).coerceAtLeast(10)
+                      tvLimitValue.text = "Лимит кликов: ${ClickConfig.maxClicks}"
+                  }
+                  val btnPlusLim = createSmallButton("+ 50") {
+                      ClickConfig.maxClicks += 50
+                      tvLimitValue.text = "Лимит кликов: ${ClickConfig.maxClicks}"
+                  }
+                  limitRow.addView(btnMinusLim)
+                  limitRow.addView(btnPlusLim)
+
+                  settingsCard.addView(tvIntervalValue)
+                  settingsCard.addView(intervalRow)
+                  settingsCard.addView(tvModeValue)
+                  settingsCard.addView(btnToggleMode)
+                  settingsCard.addView(tvLimitValue)
+                  settingsCard.addView(limitRow)
+                  root.addView(settingsCard)
+
+                  scroll.addView(root)
+                  setContentView(scroll)
+                  refreshPermissionStatuses()
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  refreshPermissionStatuses()
+              }
+
+              private fun createCard(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(32, 32, 32, 32)
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.RECTANGLE
+                          cornerRadius = 36f
+                          setColor(Color.parseColor("#191528"))
+                          setStroke(2, Color.parseColor("#2E2846"))
+                      }
+                      val lp = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { bottomMargin = 28 }
+                      layoutParams = lp
+                  }
+              }
+
+              private fun createSectionTitle(title: String): TextView {
+                  return TextView(this).apply {
+                      text = title
+                      setTextColor(Color.parseColor("#C4B5FD"))
+                      textSize = 17f
+                      setPadding(0, 0, 0, 12)
+                  }
+              }
+
+              private fun createActionButton(label: String, onClick: () -> Unit): Button {
+                  return Button(this).apply {
+                      text = label
+                      setTextColor(Color.WHITE)
+                      isAllCaps = false
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.RECTANGLE
+                          cornerRadius = 24f
+                          setColor(Color.parseColor("#241E3B"))
+                      }
+                      setPadding(24, 20, 24, 20)
+                      setOnClickListener { onClick() }
+                  }
+              }
+
+              private fun createSmallButton(label: String, onClick: () -> Unit): Button {
+                  return Button(this).apply {
+                      text = label
+                      setTextColor(Color.WHITE)
+                      isAllCaps = false
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.RECTANGLE
+                          cornerRadius = 24f
+                          setColor(Color.parseColor("#241E3B"))
+                      }
+                      val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                          marginEnd = 12
+                      }
+                      layoutParams = lp
+                      setOnClickListener { onClick() }
+                  }
+              }
+
+              private fun refreshPermissionStatuses() {
+                  val overlayOk = Settings.canDrawOverlays(this)
+                  tvOverlayStatus.text = if (overlayOk) "Поверх других окон: РАЗРЕШЕНО" else "Поверх других окон: НЕ ВЫДАНО"
+                  tvOverlayStatus.setTextColor(if (overlayOk) Color.parseColor("#4ADE80") else Color.parseColor("#F87171"))
+
+                  val accOk = isAccessibilityServiceEnabled() || ClickAccessibilityService.instance != null
+                  tvAccessibilityStatus.text = if (accOk) "Спец. возможности: ВКЛЮЧЕНЫ" else "Спец. возможности: ВЫКЛЮЧЕНЫ"
+                  tvAccessibilityStatus.setTextColor(if (accOk) Color.parseColor("#4ADE80") else Color.parseColor("#F87171"))
+              }
+
+              private fun isAccessibilityServiceEnabled(): Boolean {
+                  val expected = "$packageName/${ClickAccessibilityService::class.java.canonicalName}"
+                  val enabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+                  return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+              }
+
+              private fun requestNotificationPermissionIfNeeded() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+                      }
+                  }
+              }
+          }
+          EOF
+
+          gradle wrapper --gradle-version 8.5 --distribution-type bin
+
+      - name: Assemble Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hypertap-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
